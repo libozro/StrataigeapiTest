@@ -6,10 +6,12 @@ use App\Repository\ExerciceRepository;
 use App\Entity\Exercice;
 use App\Entity\Operation;
 use App\Form\ExerciceType;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Serializer\SerializerInterface;
+
 use Doctrine\ORM\EntityManagerInterface;
 
 class ExerciceController extends AbstractController
