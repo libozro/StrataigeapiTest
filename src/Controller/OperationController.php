@@ -67,8 +67,6 @@ class OperationController extends AbstractController
         $operation = new Operation();
         $operation->getEcriture()->setMontant(null);
        
-      
-        
         //On recupere le Json
         $jsonRecu = $request->getContent();
 
