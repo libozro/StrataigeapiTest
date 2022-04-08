@@ -4,6 +4,8 @@ namespace App\Entity;
 
 use App\Repository\DossierRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
+
 
 /**
  * @ORM\Entity(repositoryClass=DossierRepository::class)
@@ -19,6 +21,7 @@ class Dossier
 
     /**
      * @ORM\Column(type="string", length=100)
+     * @Assert\NotBlank
      */
     private $raisonsocial;
 

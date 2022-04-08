@@ -4,12 +4,15 @@ namespace App\Controller;
 
 use App\Repository\EcritureRepository;
 use App\Entity\Ecriture;
+use App\Form\EcritureType;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Serializer\SerializerInterface;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
+use Symfony\Component\Serializer\Serializer;
 
 class EcritureController extends AbstractController
 {
@@ -18,52 +21,67 @@ class EcritureController extends AbstractController
      */
     public function index(EcritureRepository $ecritureRepository)
     {
+        //on recupere la liste des ecritures
         $ecritures = $ecritureRepository-> myFindAll();
 
-        // Serialisation
-        // creation d"une veritable response
-        $response = $this->json($ecritures,200, [] , ['groups' =>'ecriture:read']);
-        return  $response;
+
+        // SERIELASATION
+
+        //On utilise un encoder en json
+        $encoders = [ new JsonEncoder()];
+
+        // On instancie le "normaliseur" pour convertir la collection tableau
+        $normalizers = [ new ObjectNormalizer()];
+
+        //On fait la convertion en json
+        //On instancie le convertisseur 
+        $serialiser = new  Serializer ($normalizers,  $encoders);
+
+        //On convertir en json  
+        $jsonContenu = $serialiser->serialize($ecritures , 'json',[
+            'circulaire_reference_hander' => function($object){
+                return $object-> getId() ; 
+            }
+        ]) ;
+        
+        //On instancie la reponse
+        $response = new Response($jsonContenu);
+         
+        //On ajoute l'entete la HTTP
+        $response->headers->set('Content-Type', 'application/json');
+
+         //On envoie la reponse
+         return  $response ;
+        
     }
 
     
     /**
      * @Route("/api/ecriture", name="api_ecri_create", methods={"POST"})
      */
-    public function postEcriture(Request $request, SerializerInterface $serialiser, EntityManagerInterface $em)
+    public function postEcriture(Request $request, EntityManagerInterface $em)
     {
-        //DESERIALISATION
-
-        // On recupere les donnees en json
-        $codeJesonRecu = $request->getContent();
-
-        try {
-
-            // Deserialisation du Json 
-            $ecriture =$serialiser->deserialize($codeJesonRecu , Ecriture::class,'json');
-            $ecriture->setDate(new \Date());
-          
-            
-             // Verification si erreur avant de persister  
-            $validator = $this->get('validator');
-            $errors = $validator->validate($exercice);
-
-            if (count($errors) > 0) {
-                $errorsString = (string) $errors;
-
-                return new JsonResponse($errorsString);
-            }
-            $em->persist($ecriture);
-            $em->flush();
-            $response = $this->json($ecriture,201,[], ['groups'=>'ecriture:read']); 
-        
-        } catch (NotEncodableValueException $e){
-            return  $this->json( [
-                'status'=> 400,
-                'message'=>  $e->getMessage() ,
-            ],400) ;
-
-        }
-    }
+         //On instancie une Ecriture
+         $ecriture = new Ecriture();
+         $ecriture->setDate(new \DateTime());
+         
+         //On recupere le Json
+         $jsonRecu = $request->getContent();
+ 
+         //On decode le Json
+         $data = json_decode($jsonRecu, true);
+         
+         //On hidrate le formulaire
+         $form = $this->createForm(EcritureType::class, $ecriture);
+ 
+         //On soumet le formulaire
+             $form->submit($data);
+             
+             $em->persist($ecriture);
+             $em->flush();
+             return $this->redirectToRoute('api_ecriture_index'); 
+         
+       
+     }
 
 }

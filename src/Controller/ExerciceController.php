@@ -6,13 +6,15 @@ use App\Repository\ExerciceRepository;
 use App\Entity\Exercice;
 use App\Entity\Operation;
 use App\Form\ExerciceType;
+use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\Serializer\SerializerInterface;
-
+use Symfony\Component\HttpFoundation\Response;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
+use Symfony\Component\Serializer\Serializer;
+
 
 class ExerciceController extends AbstractController
 {
@@ -21,58 +23,75 @@ class ExerciceController extends AbstractController
      */
     public function index(ExerciceRepository $exerciceRepository)
     {
-        $exercices = $exerciceRepository-> myFindAll();
+         //on recupere la liste des exercices
+         $exercices = $exerciceRepository-> myFindAll();
 
-        // Serialisation
-        // creation d"une veritable response
-        $response = $this->json($exercices,200, [] , ['groups' =>'exercice:read']);
-        return  $response;
+
+         // SERIELASATION
+ 
+         //On utilise un encoder en json
+         $encoders = [ new JsonEncoder()];
+ 
+         // On instancie le "normaliseur" pour convertir la collection tableau
+         $normalizers = [ new ObjectNormalizer()];
+ 
+         //On fait la convertion en json
+         //On instancie le convertisseur 
+         $serialiser = new  Serializer ($normalizers,  $encoders);
+ 
+         //On convertir en json  
+         $jsonContenu = $serialiser->serialize($exercices , 'json',[
+             'circulaire_reference_hander' => function($object){
+                 return $object-> getId() ; 
+             }
+         ]) ;
+         
+         //On instancie la reponse
+         $response = new Response($jsonContenu);
+          
+         //On ajoute l'entete la HTTP
+         $response->headers->set('Content-Type', 'application/json');
+ 
+          //On envoie la reponse
+          return  $response ;
+         
     }
 
 
     /**
      * @Route("/api/exercice", name="api_exercice_create", methods={"POST"})
      */
-    public function postExercice(Request $request, SerializerInterface $serialiser, EntityManagerInterface $em)
+    public function postExercice(Request $request,EntityManagerInterface $em)
     {
-        //DESERIALISATION
+        //On instancie un Exercice
+        $exercice = new Exercice();
+        $exercice-> setDatedebut(new \DateTime());
+        $exercice-> setDatefin(new \DateTime());
+        $exercice-> setAnneecivil(new \DateTime());
+      
+        
+        //On recupere le Json
+        $jsonRecu = $request->getContent();
 
-        // On recupere les donnees en json
-        $codeJesonRecu = $request->getContent();
+        //On decode le Json
+        $data = json_decode($jsonRecu, true);
+        
+        //On hidrate le formulaire
+        $form = $this->createForm(EcritureType::class, $exercice);
 
-        try {
-
-            // Deserialisation du Json 
-            $exercice =$serialiser->deserialize($codeJesonRecu , Exercice::class,'json');
-            $exercice->setDatedebut(new \Date());
-            $exercice->setDatefin(new \Date());
-            $exercice->setAnneecivil(new \Date());
+        //On soumet le formulaire
+            $form->submit($data);
             
-             // Verification si erreur avant de persister  
-            $validator = $this->get('validator');
-            $errors = $validator->validate($exercice);
-
-            if (count($errors) > 0) {
-                $errorsString = (string) $errors;
-
-                return new JsonResponse($errorsString);
-            }
             $em->persist($exercice);
             $em->flush();
-            $response = $this->json($exercice,201,[], ['groups'=>'exercice:read']); 
+            return $this->redirectToRoute('api_exercice_index'); 
         
-        } catch (NotEncodableValueException $e){
-            return  $this->json( [
-                'status'=> 400,
-                'message'=>  $e->getMessage() ,
-            ],400) ;
-
-        }
     }
 
 
      /**
-     * @Route("/api/exercice/{id}", name="api_exercice_create", methods={"PUT"})
+     * Enregistrement d'une opération comtable dans un exercice
+     * @Route("/api/exercice/{id}", name="api_exercice_modif", methods={"PUT"})
      */
     public function putExercice(Request $request, Exercice $exercice, EntityManagerInterface $em)
     {
@@ -84,17 +103,10 @@ class ExerciceController extends AbstractController
 
         $form = $this->createForm(ExerciceType::class, $exercice);
         $form->submit($data);
-        $validator = $this->get('validator');
-        $errors = $validator->validate($exercice);
-
-        if (count($errors) > 0) {
-            $errorsString = (string) $errors;
-
-            return new JsonResponse($errorsString);
-        }
         $em->persist($exercice);
         $em->flush();
-        return $this->view(['data' => $exercice], 200);
+        return $this->redirectToRoute('api_exercice_index'); 
+     
     }
 
 

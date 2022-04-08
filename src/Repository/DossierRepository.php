@@ -44,12 +44,17 @@ class DossierRepository extends ServiceEntityRepository
             $this->_em->flush();
         }
     }
-
-    public function myFindAll()
+    /**
+    * @return Dossier[] Returns an array of Dossier objects
+    *
+    */
+    public function myFindAll() : array
     {
-    return $this->createQueryBuilder('d')
-                ->getQuery()
-                ->getResult();
+        $qb = $this->createQueryBuilder('d')
+                ->select('d.id','d.raisonsocial','d.rcccm','d.datedebut')
+                ->orderBy('d.datedebut','DESC');
+                $query =  $qb->getQuery();
+                return  $query->getResult();
     }
 
     // /**

@@ -4,11 +4,16 @@ namespace App\Controller;
 
 
 use App\Repository\OperationRepository;
+use App\Entity\Operation;
+use App\Form\OperationType;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\Serializer\Encoder\EncoderInterface;
-use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
+use Symfony\Component\Serializer\Serializer;
 
 class OperationController extends AbstractController
 {
@@ -17,49 +22,69 @@ class OperationController extends AbstractController
      */
     public function index(OperationRepository $operationRepository)
     {
+        //on recupere la liste des exercices
         $operations = $operationRepository-> myFindAll();
 
-        // Serialisation
-        // creation d"une veritable response
-        $response = $this->json($operations,200, [] , ['groups' =>'operation:read']);
-        return  $response;
+
+        // SERIELASATION
+
+        //On utilise un encoder en json
+        $encoders = [ new JsonEncoder()];
+
+        // On instancie le "normaliseur" pour convertir la collection tableau
+        $normalizers = [ new ObjectNormalizer()];
+
+        //On fait la convertion en json
+        //On instancie le convertisseur 
+        $serialiser = new  Serializer ($normalizers,  $encoders);
+
+        //On convertir en json  
+        $jsonContenu = $serialiser->serialize($operations , 'json',[
+            'circulaire_reference_hander' => function($object){
+                return $object-> getId() ; 
+            }
+        ]) ;
+        
+        //On instancie la reponse
+        $response = new Response($jsonContenu);
+         
+        //On ajoute l'entete la HTTP
+        $response->headers->set('Content-Type', 'application/json');
+
+         //On envoie la reponse
+         return  $response ;
+        
     }
 
      /**
      * @Route("/api/operation", name="api_operation_create", methods={"POST"})
      */
-    public function postOperation(Request $request, SerializerInterface $serialiser, EntityManagerInterface $em)
+    public function postOperation(Request $request,EntityManagerInterface $em )
     {
-        //DESERIALISATION
 
-        // On recupere les donnees en json
-        $codeJesonRecu = $request->getContent();
 
-        try {
+        //On instancie un Operation
+        $operation = new Operation();
+        $operation->getEcriture()->setMontant(null);
+       
+      
+        
+        //On recupere le Json
+        $jsonRecu = $request->getContent();
 
-            // Deserialisation du Json 
-            $operation =$serialiser->deserialize($codeJesonRecu , Operation::class,'json');
-            $operation->getEcriture()->setMontant(null);
-          
-             // Verification si erreur avant de persister  
-            $validator = $this->get('validator');
-            $errors = $validator->validate($exercice);
+        //On decode le Json
+        $data = json_decode($jsonRecu, true);
+        
+        //On hidrate le formulaire
+        $form = $this->createForm(OperationType::class, $operation);
 
-            if (count($errors) > 0) {
-                $errorsString = (string) $errors;
-
-                return new JsonResponse($errorsString);
-            }
+        //On soumet le formulaire
+            $form->submit($data);
+            
             $em->persist($operation);
             $em->flush();
-            $response = $this->json($operation,201,[], ['groups'=>'operation:read']); 
+            return $this->redirectToRoute('api_operation_index'); 
         
-        } catch (NotEncodableValueException $e){
-            return  $this->json( [
-                'status'=> 400,
-                'message'=>  $e->getMessage() ,
-            ],400) ;
-
-        }
+       
     }
 }

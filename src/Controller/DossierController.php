@@ -5,12 +5,15 @@ namespace App\Controller;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use App\Repository\DossierRepository;
 use App\Entity\Dossier;
+use App\Form\DossierType;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Serializer\SerializerInterface;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
+use Symfony\Component\Serializer\Serializer;
+
 
 class DossierController extends AbstractController
 {
@@ -19,50 +22,69 @@ class DossierController extends AbstractController
      */
     public function index(DossierRepository $dossierRepository)
     {
+        //on recupere la liste des dossiers
         $dossiers = $dossierRepository-> myFindAll();
 
-        // Serialisation
-        // creation d"une veritable response
-        $response = $this->json($dossiers,200,[]);
-        return  $response;
+
+        // SERIELASATION
+
+        //On utilise un encoder en json
+        $encoders = [ new JsonEncoder()];
+
+        // On instancie le "normaliseur" pour convertir la collection tableau
+        $normalizers = [ new ObjectNormalizer()];
+
+        //On fait la convertion en json
+        //On instancie le convertisseur 
+        $serialiser = new  Serializer ($normalizers,  $encoders);
+
+        //On convertir en json  
+        $jsonContenu = $serialiser->serialize($dossiers , 'json',[
+            'circulaire_reference_hander' => function($object){
+                return $object-> getId() ; 
+            }
+        ]) ;
+        
+        //On instancie la reponse
+        $response = new Response($jsonContenu);
+         
+        //On ajoute l'entete la HTTP
+        $response->headers->set('Content-Type', 'application/json');
+
+         //On envoie la reponse
+         return  $response ;
+        
     }
 
     /**
-     * @Route("/api/dossier", name="api_dossier_create", methods={"POST"})
+     * Ajout d'un dossier
+     * 
+     * @Route("/api/dossier", name="api_create", methods={"POST"})
      */
-    public function postDossier(Request $request, SerializerInterface $serialiser, EntityManagerInterface $em)
+    public function postDossier(Request $request,  EntityManagerInterface $em) 
     {
-        //DESERIALISATION
+        
+        //On instancie un dossier
+        $dossier = new Dossier();
+        $dossier->setDatedebut(new \DateTime());
+        
+        //On recupere le Json
+        $jsonRecu = $request->getContent();
 
-        // On recupere les donnees en json
-        $codeJesonRecu = $request->getContent();
+        //On decode le Json
+        $data = json_decode($jsonRecu, true);
+        
+        //On hidrate le formulaire
+        $form = $this->createForm(DossierType::class, $dossier);
 
-        try {
-
-            // Deserialisation du Json 
-            $dossier =$serialiser->deserialize($codeJesonRecu , Dossier::class,'json');
-            $dossier->setDatedebut(new \Date());
+        //On soumet le formulaire
+            $form->submit($data);
             
-             // Verification si erreur avant de persister  
-            $validator = $this->get('validator');
-            $errors = $validator->validate($dossier);
-
-            if (count($errors) > 0) {
-                $errorsString = (string) $errors;
-
-                return new JsonResponse($errorsString);
-            }
             $em->persist($dossier);
             $em->flush();
-            $response = $this->json($dossier,201,[]); 
+            return $this->redirectToRoute('api_dossier_index'); 
         
-        } catch (NotEncodableValueException $e){
-            return  $this->json( [
-                'status'=> 400,
-                'message'=>  $e->getMessage() ,
-            ],400) ;
-
-        }
+      
     }
 
 }
